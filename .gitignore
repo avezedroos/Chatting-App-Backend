@@ -1,0 +1,25 @@
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.test
+.env.production
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cache & temp
+*.tmp
+*.temp
+.cache/
+coverage/
+dist/
+build/
