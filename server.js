@@ -56,66 +56,70 @@ io.use((socket, next) => {
 io.on("connection", async (socket) => {
   const username = socket.username;
   console.log(`Socket connected: ${username} (${socket.id})`);
-
-  // mark user online in DB (optional)
   onlineUsers.set(username, socket.id);
   await User.findOneAndUpdate({ username }, { online: true });
 
-  // Broadcast online status to all
-  io.emit("online-status", { username, online: true });
+  io.emit("online-status", { username, online: true, onlineUserss: Array.from(onlineUsers.keys()) });
 
-  // Listen: send-message
+  // Send message
   socket.on("send-message", async (data) => {
-    console.log("Send message event:", data);
-    // data: { sender, receiver, text }
     try {
       const msg = new Message({
         sender: data.sender,
         receiver: data.receiver,
         text: data.text,
         timestamp: Date.now(),
-        read: false
+        read: false,
       });
       await msg.save();
-      // Emit to both users (if connected)
-      io.to(socket.id).emit("receive-message", msg); // to sender
+
+      io.to(socket.id).emit("receive-message", msg);
       const recvSocketId = onlineUsers.get(data.receiver);
       if (recvSocketId) io.to(recvSocketId).emit("receive-message", msg);
-      // also broadcast to any other client listening
     } catch (err) {
       console.error("Send message error:", err);
     }
   });
 
-  // Typing indicator
+  // Typing (with safety timeout)
+  let typingTimeouts = {};
   socket.on("typing", (data) => {
-    // data = { from, to, isTyping: true/false }
     const recvSocketId = onlineUsers.get(data.to);
-    if (recvSocketId) {
-      io.to(recvSocketId).emit("typing", { from: data.from, isTyping: data.isTyping });
+    if (!recvSocketId) return;
+    io.to(recvSocketId).emit("typing", { from: data.from, isTyping: data.isTyping });
+
+    if (data.isTyping) {
+      clearTimeout(typingTimeouts[data.from]);
+      typingTimeouts[data.from] = setTimeout(() => {
+        io.to(recvSocketId).emit("typing", { from: data.from, isTyping: false });
+      }, 3000);
     }
   });
 
-  // Mark read
+  // Mark-read (notify both)
   socket.on("mark-read", async ({ sender, receiver }) => {
-    try {
-      const result = await Message.updateMany({ sender, receiver, read: false }, { $set: { read: true } });
-      // Inform the sender that their messages were read
-      const senderSocketId = onlineUsers.get(sender);
-      if (senderSocketId) io.to(senderSocketId).emit("messages-read", { sender, receiver });
-    } catch (err) {
-      console.error("Error marking read:", err);
-    }
+    console.log(`Mark read from ${sender} to ${receiver}`);
+    setTimeout(async () => {
+      try {
+        await Message.updateMany({ sender, receiver, read: false }, { $set: { read: true } });
+        const senderSocketId = onlineUsers.get(sender);
+        const receiverSocketId = onlineUsers.get(receiver);
+        if (senderSocketId) io.to(senderSocketId).emit("messages-read", { sender, receiver });
+        if (receiverSocketId) io.to(receiverSocketId).emit("messages-read", { sender, receiver });
+      } catch (err) {
+        console.error("Error marking read:", err);
+      }
+    }, 200);
   });
 
-  // disconnect
   socket.on("disconnect", async () => {
     console.log(`Socket disconnected: ${username} (${socket.id})`);
     onlineUsers.delete(username);
     await User.findOneAndUpdate({ username }, { online: false });
-    io.emit("online-status", { username, online: false });
+    io.emit("online-status", { username, online: false, onlineUserss: Array.from(onlineUsers.keys()) });
   });
 });
+
 
 // Start server
 const PORT = process.env.PORT || 5000;
