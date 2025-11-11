@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Get conversation for two users (sorted)
 router.get("/:userA/:userB", verifyToken, async (req, res) => {
-  console.log("i got hit in message routes");
+  console.log("i got hit in message routes for get massage");
   const { userA, userB } = req.params;
   console.log(userA, userB);
   try {
@@ -16,7 +16,7 @@ router.get("/:userA/:userB", verifyToken, async (req, res) => {
         { sender: userB, receiver: userA }
       ]
     }).sort({ timestamp: 1 });
-    console.log(msgs);
+    // console.log(msgs);
     res.json(msgs);
   } catch (err) {
     res.status(500).json({ error: err.message });
