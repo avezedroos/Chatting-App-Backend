@@ -4,7 +4,7 @@ const reactionSchema = new mongoose.Schema({
   user: { type: String, required: true }, // username of reactor
   emoji: { type: String, required: true }, // e.g. "❤️", "😂", "👍"
   reactedAt: { type: Date, default: Date.now },
-});
+}, { _id: false });
 
 const attachmentSchema = new mongoose.Schema({
   url: { type: String, required: true },
