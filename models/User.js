@@ -32,6 +32,7 @@ const connectionSchema = new mongoose.Schema(
 
     //(5)
     lastMessage: {
+      msgId: { type: mongoose.Schema.Types.ObjectId, ref: "Message", default: null },
       message: { type: String, default: "" },
       time: { type: Date, default: null },
     },

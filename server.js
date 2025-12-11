@@ -1,7 +1,7 @@
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
-import mongoose from "mongoose";
+// import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/auth.js";
@@ -11,6 +11,11 @@ import User from "./models/User.js";
 import Message from "./models/Message.js";
 import connectDB from "./config/db.js";
 import { updateLastMessage } from "./utility/updateLastMessage.js";
+// ---- Socket auth helper ----
+import jwt from "jsonwebtoken";
+import { getAcceptedConnectionUsernames, getConnectionUsernames } from "./utility/getConnectionList.js";
+import { validateEditMessage } from "./validations/validateEditMessage.js";
+
 
 dotenv.config();
 
@@ -21,7 +26,7 @@ const io = new Server(server, {
   cors: {
     origin: process.env.FRONTEND_URL || "http://localhost:5173",
     methods: ["GET", "POST"],
-    // credentials: true,
+   
   }
 });
 
@@ -29,18 +34,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// DB connect
+connectDB();
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/connections", connectionRoutes);
 
 
-// DB connect
-connectDB();
-
-// ---- Socket auth helper ----
-import jwt from "jsonwebtoken";
-import { getConnectionUsernames } from "./utility/getConnectionList.js";
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // Map username -> socketId (for simple online tracking; single socket per user assumed)
@@ -77,18 +79,17 @@ io.use(async (socket, next) => {
 
 io.on("connection", async (socket) => {
   const username = socket.username;
-  socket.data.connectionlist = await getConnectionUsernames(username, onlineUsers)
-  const connectionlist = socket.data.connectionlist
+  socket.data.acceptedconnectionlist = await getAcceptedConnectionUsernames(username)
+  let connectionlist = await getConnectionUsernames(socket.data.acceptedconnectionlist, onlineUsers)// this is array of usernames who is in user connection list (only accepted connections) + online at the time of creation of socket 
   console.log(`Socket connected: ${username} (${socket.id})`);
   socket.join(username);
   onlineUsers.set(username, socket.id);
-  // console.log(onlineUsers)
   await User.findOneAndUpdate({ username }, { $set: { "onlineStatus.online": true, "onlineStatus.lastSeen": null } });
-  //  connectionlist = await getConnectionUsernames(username,onlineUsers)
-
+  
   try {
-    console.log("connectionlist", connectionlist)
+    // console.log("connectionlist", connectionlist)
     if (connectionlist.length > 0) {
+      
       io.to(connectionlist).emit("user-online", {
         payload: username
       });
@@ -134,7 +135,7 @@ io.on("connection", async (socket) => {
         select: "_id text sender",
       });
 
-      await updateLastMessage(data.sender, data.receiver, data.text);
+      await updateLastMessage(data.sender, data.receiver, data.text,msg._id, false);
       callback({ status: true, data: msg });
       // io.to(socket.id).emit("receive-message", msg);
 
@@ -147,31 +148,31 @@ io.on("connection", async (socket) => {
   });
 
   // Typing (with safety timeout)
- const typingTimeouts = new Map();
+  const typingTimeouts = new Map();
 
-socket.on("typing", ({ from, to, isTyping }) => {
-// console.log("typing is running")
-  const receiverSocketId = onlineUsers.get(to);
-  if (!receiverSocketId) return;
+  socket.on("typing", ({ from, to, isTyping }) => {
+    // console.log("typing is running")
+    const receiverSocketId = onlineUsers.get(to);
+    if (!receiverSocketId) return;
 
-  const key = `${from}-${to}`;
+    const key = `${from}-${to}`;
 
-  io.to(receiverSocketId).emit("typing", { from, isTyping });
+    io.to(receiverSocketId).emit("typing", { from, isTyping });
 
-  if (isTyping) {
-    // Clear existing timeout for this conversation
-    if (typingTimeouts.has(key)) {
-      clearTimeout(typingTimeouts.get(key));
+    if (isTyping) {
+      // Clear existing timeout for this conversation
+      if (typingTimeouts.has(key)) {
+        clearTimeout(typingTimeouts.get(key));
+      }
+
+      const timeout = setTimeout(() => {
+        io.to(receiverSocketId).emit("typing", { from, isTyping: false });
+        typingTimeouts.delete(key);
+      }, 3000);
+
+      typingTimeouts.set(key, timeout);
     }
-
-    const timeout = setTimeout(() => {
-      io.to(receiverSocketId).emit("typing", { from, isTyping: false });
-      typingTimeouts.delete(key);
-    }, 3000);
-
-    typingTimeouts.set(key, timeout);
-  }
-});
+  });
 
 
   //emi delivered
@@ -273,7 +274,7 @@ socket.on("typing", ({ from, to, isTyping }) => {
     try {
       console.log("⚡ Reaction event received:", data);
 
-      let { messageId, user, emoji ,otherUser } = data;
+      let { messageId, user, emoji, otherUser } = data;
 
       // ----------- Validate payload ----------
       if (!messageId || !user) {
@@ -306,7 +307,7 @@ socket.on("typing", ({ from, to, isTyping }) => {
           { $pull: { reactions: { user } } },
           { new: true }
         );
-        emitReactionToUsers(updatedMsg,otherUser,user);
+        emitReactionToUsers(updatedMsg, otherUser, user);
         console.log("🗑 Reaction removed");
         return;
       }
@@ -322,7 +323,7 @@ socket.on("typing", ({ from, to, isTyping }) => {
           { $set: { "reactions.$.emoji": emoji } },
           { new: true }
         );
-        emitReactionToUsers(updatedMsg,otherUser,user);
+        emitReactionToUsers(updatedMsg, otherUser, user);
         console.log("🔄 Reaction updated");
         return;
       }
@@ -336,7 +337,7 @@ socket.on("typing", ({ from, to, isTyping }) => {
         { new: true }
       );
 
-      emitReactionToUsers(updatedMsg,otherUser,user);
+      emitReactionToUsers(updatedMsg, otherUser, user);
       console.log("✨ Reaction added");
 
     } catch (err) {
@@ -347,7 +348,7 @@ socket.on("typing", ({ from, to, isTyping }) => {
   // ----------------------------------------------------
   // 📡 Helper: Emit updated reaction to the sender & receiver
   // ----------------------------------------------------
-  function emitReactionToUsers(msg , otherUser,user) {
+  function emitReactionToUsers(msg, otherUser, user) {
     // const senderSocket = onlineUsers.get(otherUser);
     const receiverSocket = onlineUsers.get(otherUser);
     // console.log("emitReactionToUsers is running ", receiverSocket,senderSocket)
@@ -363,6 +364,156 @@ socket.on("typing", ({ from, to, isTyping }) => {
       io.to(receiverSocket).emit("reaction-updated", payload);
   }
 
+  // ---------------------------------------------
+  // ✏️ Edit Message
+  // ---------------------------------------------
+
+  socket.on("edit-Message", async ({ messageId, newText }) => {
+    try {
+      console.log("Edit message event received:", { messageId, newText });
+      const msg = await Message.findById(messageId);
+      // Run validation
+      const check = validateEditMessage({
+        msg,
+        userId: socket.userId,
+        newText,
+        username: socket.username
+      });
+
+      if (!check.ok) {
+        // return socket.emit("editError", check.error);
+        console.log("Edit message validation failed:", check.error);
+        //send ack with error (as a callback )
+      }
+
+      // Final re-fetch (optional but safe)
+      const freshMsg = await Message.findById(messageId);
+      if (!freshMsg || freshMsg.isDeletedForEveryone) {
+        // return socket.emit("editError", "Message no longer available.");
+        console.log("Edit message validation failed:", check.error);
+        //send ack with error (as a callback )
+      }
+
+      // Save update
+      freshMsg.text = newText;
+      freshMsg.isEdited = true;
+      await freshMsg.save();
+      const payload = {
+        username: freshMsg.sender,
+        messageId: freshMsg._id,
+        newText: freshMsg.text,
+        isEdited: freshMsg.isEdited,
+        editedAt: freshMsg.editedAt,
+      };
+
+       await updateLastMessage(freshMsg.sender, freshMsg.receiver, newText,freshMsg._id, true);
+      io.to(msg.receiver).emit("messageUpdated", payload);
+
+    } catch (error) {
+      console.log(error);
+      socket.emit("editError", "Internal error.");
+    }
+  }
+  );
+
+socket.on("deleteMessageForMeBulk", async ({ messageIds }) => {
+  try {
+    const username = socket.username;
+    await Message.updateMany(
+      { _id: { $in: messageIds } },
+      { $addToSet: { deletedFor: username } }
+    );
+// i want build the validation for this event too but later
+
+  } catch (err) {
+    console.error("Bulk delete error:", err);
+  }
+});
+
+
+socket.on("deleteMessageForEveryoneBulk", async ({ messageIds }) => {
+  try {
+    const currentTime = Date.now();
+    const requestorName = socket.username; // sender
+    const LIMIT_MINUTES = 90;
+    const LIMIT_MS = LIMIT_MINUTES * 60 * 1000;
+
+    // Fetch all messages at once
+    const messages = await Message.find({ _id: { $in: messageIds } });
+    if (!messages.length) return;
+
+    const validIds = [];
+
+    for (const msg of messages) {
+      if (!msg) continue;
+
+      // 1️⃣ Only allow sender to delete for everyone
+      if (msg.sender !== requestorName) continue;
+
+      // 2️⃣ Enforce 90 minute delete window
+      const sentTime = msg.timestamp.getTime();
+      if (Date.now() - sentTime > LIMIT_MS) continue;
+
+      // 3️⃣ Skip already deleted messages
+      if (msg.isDeletedForEveryone) continue;
+
+      // 4️⃣ Optional tighter window for media
+      if (["image", "video"].includes(msg.type)) {
+        if (Date.now() - sentTime > 30 * 60 * 1000) continue; // 30 min
+      }
+
+      validIds.push(msg._id.toString());
+    }
+
+    if (!validIds.length) return;
+
+    // 🔥 Update all valid messages in DB
+    await Message.updateMany(
+      { _id: { $in: validIds } },
+      {
+        text: "This message was deleted",
+        attachments: [],
+        reactions: [],
+        isDeletedForEveryone: true,
+        isEdited: false,
+        editedAt: currentTime,
+      }
+    );
+
+    // 🔥 Fetch updated messages (only receivers needed)
+    const finalMessages = await Message.find({ _id: { $in: validIds } });
+
+    // 🔥 Group messages by receiver
+    const receiverGroups = {}; 
+    for (const msg of finalMessages) {
+      const receiver = msg.receiver;
+
+      if (!receiverGroups[receiver]) receiverGroups[receiver] = [];
+      receiverGroups[receiver].push(msg._id.toString());
+    }
+
+    // 🔥 Notify each receiver once with only their message IDs
+    for (const receiver in receiverGroups) {
+      await updateLastMessage(requestorName, receiver, "This message was deleted",receiverGroups[receiver], true );
+      io.to(receiver).emit("messagesDeletedForEveryoneBulk", {
+       
+        messageIds: receiverGroups[receiver],  // only relevant ids
+        sender: requestorName,
+        timestamp: currentTime,
+       
+      });
+    }
+
+  } catch (err) {
+    console.log("Delete for everyone error:", err);
+  }
+});
+
+
+
+
+
+      
 
 
 
@@ -372,6 +523,7 @@ socket.on("typing", ({ from, to, isTyping }) => {
 
     // remove from online users map
     onlineUsers.delete(username);
+    let connectionlist = await getConnectionUsernames(socket.data.acceptedconnectionlist, onlineUsers)// this is array of usernames who is in user connection list (only accepted connections) + online at the time of creation of socket
 
     // ✅ update nested onlineStatus fields
     await User.findOneAndUpdate({ username },
