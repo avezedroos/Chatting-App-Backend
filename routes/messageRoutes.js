@@ -27,13 +27,15 @@ router.get("/:userA/:userB", verifyToken, async (req, res) => {
         { deletedFor: { $ne: requestingUser } }  // ❌ Exclude deleted messages
       ]
     })
-      .sort({ timestamp: 1 })
+      .sort({ timestamp: -1 })
+       .limit(50)  
       .populate({
         path: "replyTo",
         select: "_id text sender",
       });
 
-    res.json(msgs);
+    // reverse so frontend gets oldest → newest
+    res.json(msgs.reverse());
 
   } catch (err) {
     res.status(500).json({ error: err.message });
