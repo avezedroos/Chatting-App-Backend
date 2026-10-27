@@ -5,7 +5,9 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import connectionRoutes from "./routes/connectionRoutes.js";
+import notificationRoutes from './routes/notificationRoutes.js';
 import connectDB from "./config/db.js";
+
 
 dotenv.config();
 
@@ -21,5 +23,6 @@ connectDB();
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/connections", connectionRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 export default app;

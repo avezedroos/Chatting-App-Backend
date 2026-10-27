@@ -3,6 +3,7 @@ import User from "../../models/User.js";
 import onlineUsers from "../onlineUsers.js";
 import { updateLastMessage } from "../../utility/updateLastMessage.js";
 import { validateMarkRead, validateMessageReceived, validateSendMessage } from "../validators/messageValidation.js";
+import { sendPushNotification } from "../../services/sendPushNotification.js";
 
 export default function registerMessageHandlers(io, socket) {
 
@@ -51,7 +52,32 @@ export default function registerMessageHandlers(io, socket) {
       const recvSocketId = onlineUsers.get(data.receiver);
 
       if (recvSocketId) io.to(recvSocketId).emit("receive-message", msg);
-    } catch (err) {
+    
+    
+     // Find the sender's username for the notification title.
+    // This assumes your User model uses the field "username".
+    const senderUser = await User.findById(data.sender)
+      .select("username")
+      .lean();
+
+    // Send the push notification to the receiver's registered Android devices.
+    // Keep notification failures separate from message delivery.
+    try {
+      await sendPushNotification({
+        recipientId: data.receiver,
+        senderName: senderUser?.username || "New message",
+        messageText:
+          data.type === "text"
+            ? data.text
+            : `Sent you a ${data.type || "message"}`,
+        senderId: String(data.sender),
+      });
+    } catch (pushError) {
+      console.error("Push notification failed:", pushError);
+    }
+  
+    
+   } catch (err) {
       console.error("Send message error:", err);
       callback({ status: false, error: "Internal server error" });
     }
@@ -83,6 +109,7 @@ export default function registerMessageHandlers(io, socket) {
   });
 
   socket.on("message-received", async ({ payload }) => {
+    console.log("message-received runing")
      try {
           const error = validateMessageReceived(payload);
       if (error) return;

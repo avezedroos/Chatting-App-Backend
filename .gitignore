@@ -1,6 +1,8 @@
 # Node modules
 node_modules/
 
+secrets/
+
 # Logs
 logs
 *.log
@@ -23,3 +25,4 @@ Thumbs.db
 coverage/
 dist/
 build/
+
