@@ -56,16 +56,16 @@ export default function registerMessageHandlers(io, socket) {
     
      // Find the sender's username for the notification title.
     // This assumes your User model uses the field "username".
-    const senderUser = await User.findById(data.sender)
-      .select("username")
-      .lean();
+    // const senderUser = await User.findById(data.sender)
+    //   .select("username")
+    //   .lean();
 
     // Send the push notification to the receiver's registered Android devices.
     // Keep notification failures separate from message delivery.
     try {
       await sendPushNotification({
         recipientUsername: data.receiver,
-        senderName: senderUser?.username || "New message",
+        senderName: data.sender || "New message",
         messageText:
           data.type === "text"
             ? data.text
