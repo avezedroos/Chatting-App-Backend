@@ -15,7 +15,7 @@ export const registerDeviceToken = async (req, res) => {
       { token },
       {
         $set: {
-          userId: req.user.username,
+          username: (await User.findById(req.userId).select('username')).username,
           platform: 'android',
         },
       },
