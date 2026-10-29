@@ -64,13 +64,12 @@ export default function registerMessageHandlers(io, socket) {
     // Keep notification failures separate from message delivery.
     try {
       await sendPushNotification({
-        recipientId: data.receiver,
+        recipientUsername: data.receiver,
         senderName: senderUser?.username || "New message",
         messageText:
           data.type === "text"
             ? data.text
             : `Sent you a ${data.type || "message"}`,
-        senderId: String(data.sender),
       });
     } catch (pushError) {
       console.error("Push notification failed:", pushError);

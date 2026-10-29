@@ -3,13 +3,12 @@ import admin from '../config/firebaseAdmin.js';
 import DeviceToken from '../models/DeviceToken.js';
 
 export async function sendPushNotification({
-  recipientId,
+  recipientUsername,
   senderName,
   messageText,
-  senderId,
 }) {
   const devices = await DeviceToken.find({
-    userId: recipientId,
+   username: recipientUsername,
     platform: 'android',
   }).select('token');
 
@@ -27,7 +26,7 @@ export async function sendPushNotification({
 
         data: {
           type: 'chat_message',
-          senderId: String(senderId),
+          senderName: senderName,
         },
 
         android: {
