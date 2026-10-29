@@ -1,5 +1,6 @@
 
 import DeviceToken from '../models/DeviceToken.js';
+import User from '../models/User.js';
 
 export const registerDeviceToken = async (req, res) => {
   try {
