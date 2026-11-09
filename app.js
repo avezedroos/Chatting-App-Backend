@@ -6,6 +6,7 @@ import authRoutes from "./routes/auth.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import connectionRoutes from "./routes/connectionRoutes.js";
 import notificationRoutes from './routes/notificationRoutes.js';
+import userSettingsRoutes from './routes/userSettingsRoutes.js';
 import connectDB from "./config/db.js";
 
 
@@ -24,5 +25,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/connections", connectionRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/userSettings', userSettingsRoutes);
 
 export default app;

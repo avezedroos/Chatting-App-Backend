@@ -165,6 +165,7 @@ export const verifyUser = async (req, res) => {
       userdata: {
         username: user.username,
         inviteCode: user.inviteCode,
+        settings:user.settings,
         connections: acceptedConnections,
       },
     });

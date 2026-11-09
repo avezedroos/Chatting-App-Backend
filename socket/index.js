@@ -7,6 +7,7 @@ import registerMessageHandlers from "./handlers/message.js";
 import registerReactionHandlers from "./handlers/reaction.js";
 import registerEditHandlers from "./handlers/edit.js";
 import registerDeleteHandlers from "./handlers/delete.js";
+import registerPinHandlers from "./handlers/pin.js";
 
 export default function initSocket(server) {
   const io = new Server(server, {
@@ -45,6 +46,7 @@ export default function initSocket(server) {
     registerReactionHandlers(io, socket);
     registerEditHandlers(io, socket);
     registerDeleteHandlers(io, socket);
+    registerPinHandlers(io,socket);
   });
 
   return io;

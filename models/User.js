@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 // import mongoose from "mongoose";
-
+import userSettingsSchema from "./schemas/userSettingsSchema.js";
 const connectionSchema = new mongoose.Schema(
   {
     // The other user's ObjectId (1)
@@ -10,7 +10,7 @@ const connectionSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-// the other user's username (2)
+    // the other user's username (2)
     username: {
       type: String,
       required: true,
@@ -23,7 +23,7 @@ const connectionSchema = new mongoose.Schema(
       enum: ["sent", "received"], // easy to filter
       required: true,
     },
-//(4)
+    //(4)
     status: {
       type: String,
       enum: ["pending", "accepted", "rejected", "blocked"],
@@ -44,12 +44,6 @@ const connectionSchema = new mongoose.Schema(
       min: 0,
     },
 
-    // onlineStatus: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: "User",
-    //   required: true,
-    // },
-
     //(7)
     notes: {
       type: String,
@@ -62,8 +56,30 @@ const connectionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+
+    //9
+    pin: {
+      type: [
+        {
+          msgId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Message",
+            required: true,
+          },
+          type: {
+            type: String,
+            required: true,
+          },
+          timestamp: {
+            type: Date,
+            required: true,
+          },
+        },
+      ],
+      default: undefined,
+    },
   },
- {
+  {
     _id: false,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
@@ -130,6 +146,13 @@ const userSchema = new mongoose.Schema(
       online: { type: Boolean, default: false },
       lastSeen: { type: Date, default: null },
     },
+
+    // USER SETTINGS
+    settings: {
+      type: userSettingsSchema,
+      default: () => ({}),
+    },
+
   },
   { timestamps: true }
 );
