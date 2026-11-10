@@ -44,18 +44,18 @@ router.get("/:userA/:userB", verifyToken, async (req, res) => {
 
 
 // Mark messages from sender->receiver as read
-router.put("/mark-read", verifyToken, async (req, res) => {
-  console.log("mark-read route hit", req.body);
-  const { sender, receiver } = req.body;
-  try {
-    const result = await Message.updateMany(
-      { sender, receiver, read: false },
-      { $set: { read: true } }
-    );
-    res.json({ modifiedCount: result.modifiedCount });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// router.put("/mark-read", verifyToken, async (req, res) => {
+//   console.log("mark-read route hit", req.body);
+//   const { sender, receiver } = req.body;
+//   try {
+//     const result = await Message.updateMany(
+//       { sender, receiver, read: false },
+//       { $set: { read: true } }
+//     );
+//     res.json({ modifiedCount: result.modifiedCount });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
 
 export default router;
