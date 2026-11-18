@@ -134,6 +134,7 @@ export const loginUser = async (req, res) => {
         username: user.username,
         inviteCode: user.inviteCode,
         connections: acceptedConnections,
+        settings:user.settings,
       },
     });
   } catch (err) {
